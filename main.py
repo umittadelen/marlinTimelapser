@@ -23,13 +23,13 @@ cap = cv2.VideoCapture(CAMERA_INDEX)
 
 def send_gcode(cmd):
     """Send a command to the printer and wait for 'ok'."""
-    print(f"[→] {cmd}")
+    print(f"[←] {cmd}")
     ser.write((cmd + "\n").encode())
 
     while True:
         line = ser.readline().decode(errors="ignore").strip()
         if line:
-            print(f"[←] Printer: {line}")
+            print(f"[→] Printer: {line}")
         if "ok" in line.lower():
             break
 

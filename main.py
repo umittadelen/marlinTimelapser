@@ -5,6 +5,7 @@ import os
 from tqdm import tqdm
 import argparse
 from chromaconsole import *
+import datetime
 
 # ---------------- SETTINGS ----------------
 def parse_args():
@@ -15,6 +16,9 @@ def parse_args():
     parser.add_argument("--frames_dir", type=str, default="./frames", help="Directory to save frames")
     parser.add_argument("--camera_index", type=int, default=0, help="Camera index")
     parser.add_argument("--record", action="store_true", help="Enable recording frames")
+    parser.add_argument("--camera_resolution", type=str, default="1920x1080", help="Camera resolution in WIDTHxHEIGHT format")
+    parser.add_argument("--camera_brightness", type=int, default=128, help="Camera brightness (0-255)")
+    parser.add_argument("--camera_contrast", type=int, default=128, help="Camera contrast (0-255)")
     return parser.parse_args()
 
 args = parse_args()
@@ -25,11 +29,18 @@ GCODE_FILE = args.gcode_file
 FRAMES_DIR = args.frames_dir
 CAMERA_INDEX = args.camera_index
 RECORD = args.record
+CAMERA_RESOLUTION = tuple(map(int, args.camera_resolution.split('x')))
+CAMERA_BRIGHTNESS = args.camera_brightness
+CAMERA_CONTRAST = args.camera_contrast
 # ------------------------------------------
 
 if RECORD:
     os.makedirs(FRAMES_DIR, exist_ok=True)
     cap = cv2.VideoCapture(CAMERA_INDEX)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_RESOLUTION[0])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_RESOLUTION[1])
+    cap.set(cv2.CAP_PROP_BRIGHTNESS, CAMERA_BRIGHTNESS)
+    cap.set(cv2.CAP_PROP_CONTRAST, CAMERA_CONTRAST)
 else:
     cap = None
 
@@ -56,8 +67,11 @@ def take_picture(layer):
     ret, frame = cap.read()
     if ret:
         path = os.path.join(FRAMES_DIR, f"frame{layer}.png")
-        cv2.imwrite(path, frame)
-        tqdm.write(f"{Color.Text.br_white()}[📸] Saved picture: {path}{Style.reset()}")
+        # Ensure the frame is properly saved in PNG format
+        if not cv2.imwrite(path, frame):
+            tqdm.write(f"{Color.Text.br_red()}[!] Failed to save image: {path}{Style.reset()}")
+        else:
+            tqdm.write(f"{Color.Text.br_white()}[📸] Saved picture: {path}{Style.reset()}")
     else:
         tqdm.write(f"{Color.Text.br_red()}[!] Failed to capture image{Style.reset()}")
 
@@ -74,6 +88,10 @@ def parse_temp(line):
         except:
             return None
     return None
+
+def format_time(seconds):
+    """Format seconds into HH:MM:SS."""
+    return str(datetime.timedelta(seconds=int(seconds)))
 
 # Count total non-comment lines in the G-code file
 def count_non_comment_lines(file_path):
@@ -95,6 +113,11 @@ progress_bar = tqdm(
     ascii=grad
 )
 
+# Initialize variables for time calculation
+total_time = None
+elapsed_time = 0
+missing_time_warning = False
+
 # -------- Main loop --------
 with open(GCODE_FILE, "r") as f:
     layer = 0
@@ -105,6 +128,28 @@ with open(GCODE_FILE, "r") as f:
             if ";LAYER_CHANGE" in raw_line:
                 layer += 1
                 take_picture(layer)
+
+            # Parse ;TIME and ;TIME_ELAPSED comments
+            if line.startswith(";TIME:"):
+                try:
+                    total_time = int(line.split(":")[1])
+                except ValueError:
+                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME format: {line}{Style.reset()}")
+
+            elif line.startswith(";TIME_ELAPSED:"):
+                try:
+                    elapsed_time = float(line.split(":")[1])
+                except ValueError:
+                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME_ELAPSED format: {line}{Style.reset()}")
+
+            # Calculate and display remaining time
+            if total_time is not None:
+                remaining_time = total_time - elapsed_time
+                progress_bar.set_description(f"{Color.Text.br_cyan()}Remaining: {format_time(remaining_time)}{Style.reset()}")
+            elif not missing_time_warning:
+                tqdm.write(f"{Color.Text.br_yellow()}[!] Missing ;TIME or ;TIME_ELAPSED comments in G-code. Remaining time cannot be calculated.{Style.reset()}")
+                missing_time_warning = True
+
             continue
 
         # Handle heating commands

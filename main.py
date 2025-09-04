@@ -9,23 +9,70 @@ import datetime
 
 # ---------------- SETTINGS ----------------
 def parse_args():
-    parser = argparse.ArgumentParser(description="3D Printer Timelapser")
-    parser.add_argument("--port", type=str, default="COM4", help="Printer COM port")
-    parser.add_argument("--baudrate", type=int, default=115200, help="Printer baud rate")
-    parser.add_argument("--gcode_file", type=str, default="a.gcode", help="Path to the G-code file")
-    parser.add_argument("--frames_dir", type=str, default="./frames", help="Directory to save frames")
-    parser.add_argument("--camera_index", type=int, default=0, help="Camera index")
-    parser.add_argument("--record", action="store_true", help="Enable recording frames")
-    parser.add_argument("--camera_resolution", type=str, default="1920x1080", help="Camera resolution in WIDTHxHEIGHT format")
-    parser.add_argument("--camera_brightness", type=int, default=128, help="Camera brightness (0-255)")
-    parser.add_argument("--camera_contrast", type=int, default=128, help="Camera contrast (0-255)")
+    parser = argparse.ArgumentParser(
+        description="📸 3D Printer Timelapser — stream G-code to your printer and capture photos each layer."
+    )
+    parser.add_argument(
+        "--port", "-p",
+        type=str,
+        default="COM4",
+        help="Printer COM port (default: COM4)"
+    )
+    parser.add_argument(
+        "--baudrate", "-br",
+        type=int,
+        default=115200,
+        help="Printer baud rate (default: 115200)"
+    )
+    parser.add_argument(
+        "--gcode_file", "-gf",
+        type=str,
+        default="a.gcode",
+        help="Path to the G-code file (.gcode)"
+    )
+    parser.add_argument(
+        "--frames_dir", "-fd",
+        type=str,
+        default="./frames",
+        help="Directory to save captured frames (default: ./frames)"
+    )
+    parser.add_argument(
+        "--camera_index", "-ci",
+        type=int,
+        default=0,
+        help="Camera index for OpenCV (default: 0)"
+    )
+    parser.add_argument(
+        "--record", "-r",
+        action="store_true",
+        help="Enable recording frames (saves PNGs for each layer)"
+    )
+    parser.add_argument(
+        "--camera_resolution", "-cr",
+        type=str,
+        default="640x480",
+        help="Camera resolution in WIDTHxHEIGHT format (default: 640x480)"
+    )
+    parser.add_argument(
+        "--camera_brightness", "-cb",
+        type=int,
+        default=128,
+        help="Camera brightness (0–255, default: 128)"
+    )
+    parser.add_argument(
+        "--camera_contrast", "-cc",
+        type=int,
+        default=128,
+        help="Camera contrast (0–255, default: 128)"
+    )
     return parser.parse_args()
+# ------------------------------------------
 
 args = parse_args()
 
 PORT = args.port
 BAUDRATE = args.baudrate
-GCODE_FILE = args.gcode_file
+GCODE_FILE = args.gcode_file if args.gcode_file.endswith('.gcode') else args.gcode_file + '.gcode'
 FRAMES_DIR = args.frames_dir
 CAMERA_INDEX = args.camera_index
 RECORD = args.record
@@ -50,13 +97,13 @@ time.sleep(2)  # wait for connection
 
 def send_gcode(cmd):
     """Send a command to the printer and wait for 'ok'."""
-    tqdm.write(f"{Color.Text.br_magenta()}[→] {cmd}{Style.reset()}")
+    tqdm.write(f"{Color.Text.br_magenta()}[←] {cmd}{Style.reset()}")
     ser.write((cmd + "\n").encode())
 
     while True:
         line = ser.readline().decode(errors="ignore").strip()
         if line:
-            tqdm.write(f"{Color.Text.br_yellow()}[←] Printer: {line}{Style.reset()}")
+            tqdm.write(f"{Color.Text.br_yellow()}[→] Printer: {line}{Style.reset()}")
         if "ok" in line.lower():
             break
 
@@ -69,11 +116,11 @@ def take_picture(layer):
         path = os.path.join(FRAMES_DIR, f"frame{layer}.png")
         # Ensure the frame is properly saved in PNG format
         if not cv2.imwrite(path, frame):
-            tqdm.write(f"{Color.Text.br_red()}[!] Failed to save image: {path}{Style.reset()}")
+            tqdm.write(f"{Color.Text.br_red()}[!] Failed to save image: {path}{Style.reset()}{Console.bell()}")
         else:
             tqdm.write(f"{Color.Text.br_white()}[📸] Saved picture: {path}{Style.reset()}")
     else:
-        tqdm.write(f"{Color.Text.br_red()}[!] Failed to capture image{Style.reset()}")
+        tqdm.write(f"{Color.Text.br_red()}[!] Failed to capture image{Style.reset()}{Console.bell()}")
 
 def clean_line(line):
     """Remove comments and spaces."""
@@ -101,22 +148,21 @@ def count_non_comment_lines(file_path):
 total_lines = count_non_comment_lines(GCODE_FILE)
 
 # Initialize tqdm progress bar
-# grad = " ⡀⡄⡆⡇⣇⣧⣷⣿"
-grad = " ░▒▓█"
+grad = " ⡀⡄⡆⡇⣇⣧⣷⣿"
+#grad = " ░▒▓█"
 progress_bar = tqdm(
     total=total_lines,
     desc=f"{Color.Text.br_cyan()}Processing G-code{Style.reset()}",
     unit="line",
     dynamic_ncols=True,
     leave=True,
-    colour="#17fc03",
+    colour="#00ff00",
     ascii=grad
 )
 
 # Initialize variables for time calculation
 total_time = None
 elapsed_time = 0
-missing_time_warning = False
 
 # -------- Main loop --------
 with open(GCODE_FILE, "r") as f:
@@ -134,23 +180,23 @@ with open(GCODE_FILE, "r") as f:
                 try:
                     total_time = int(line.split(":")[1])
                 except ValueError:
-                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME format: {line}{Style.reset()}")
+                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME format: {line}{Style.reset()}{Console.bell()}")
 
             elif line.startswith(";TIME_ELAPSED:"):
                 try:
                     elapsed_time = float(line.split(":")[1])
                 except ValueError:
-                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME_ELAPSED format: {line}{Style.reset()}")
+                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME_ELAPSED format: {line}{Style.reset()}{Console.bell()}")
 
             # Calculate and display remaining time
             if total_time is not None:
                 remaining_time = total_time - elapsed_time
-                progress_bar.set_description(f"{Color.Text.br_cyan()}Remaining: {format_time(remaining_time)}{Style.reset()}")
-            elif not missing_time_warning:
-                tqdm.write(f"{Color.Text.br_yellow()}[!] Missing ;TIME or ;TIME_ELAPSED comments in G-code. Remaining time cannot be calculated.{Style.reset()}")
-                missing_time_warning = True
+                progress_bar.set_description(f"{Color.Text.br_cyan()}Remaining: {format_time(remaining_time) if remaining_time!=None else "NaN"}{Style.reset()}")
 
             continue
+
+        if total_time is None:
+            tqdm.write(f"{Color.Text.br_red()}[!] Missing ;TIME comment in G-code. Remaining time cannot be calculated.{Style.reset()}{Console.bell()}")
 
         # Handle heating commands
         if line.startswith("M104"):  # set nozzle temp (no wait)
@@ -201,4 +247,4 @@ progress_bar.close()
 if cap:
     cap.release()
 ser.close()
-print("[✔] Print finished")
+print(f"[✔] Print finished{Console.bell()}")

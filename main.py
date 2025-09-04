@@ -116,11 +116,11 @@ def take_picture(layer):
         path = os.path.join(FRAMES_DIR, f"frame{layer}.png")
         # Ensure the frame is properly saved in PNG format
         if not cv2.imwrite(path, frame):
-            tqdm.write(f"{Color.Text.br_red()}[!] Failed to save image: {path}{Style.reset()}{Console.bell()}")
+            tqdm.write(f"{Color.Text.br_red()}[!] Failed to save image: {path}{Style.reset()}")
         else:
             tqdm.write(f"{Color.Text.br_white()}[📸] Saved picture: {path}{Style.reset()}")
     else:
-        tqdm.write(f"{Color.Text.br_red()}[!] Failed to capture image{Style.reset()}{Console.bell()}")
+        tqdm.write(f"{Color.Text.br_red()}[!] Failed to capture image{Style.reset()}")
 
 def clean_line(line):
     """Remove comments and spaces."""
@@ -180,13 +180,13 @@ with open(GCODE_FILE, "r") as f:
                 try:
                     total_time = int(line.split(":")[1])
                 except ValueError:
-                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME format: {line}{Style.reset()}{Console.bell()}")
+                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME format: {line}{Style.reset()}")
 
             elif line.startswith(";TIME_ELAPSED:"):
                 try:
                     elapsed_time = float(line.split(":")[1])
                 except ValueError:
-                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME_ELAPSED format: {line}{Style.reset()}{Console.bell()}")
+                    tqdm.write(f"{Color.Text.br_red()}[!] Invalid TIME_ELAPSED format: {line}{Style.reset()}")
 
             # Calculate and display remaining time
             if total_time is not None:
@@ -196,7 +196,8 @@ with open(GCODE_FILE, "r") as f:
             continue
 
         if total_time is None:
-            tqdm.write(f"{Color.Text.br_red()}[!] Missing ;TIME comment in G-code. Remaining time cannot be calculated.{Style.reset()}{Console.bell()}")
+            tqdm.write(f"{Color.Text.br_red()}[!] Missing ;TIME comment in G-code. Remaining time cannot be calculated.{Style.reset()}")
+            total_time = -1
 
         # Handle heating commands
         if line.startswith("M104"):  # set nozzle temp (no wait)
@@ -247,4 +248,4 @@ progress_bar.close()
 if cap:
     cap.release()
 ser.close()
-print(f"[✔] Print finished{Console.bell()}")
+print(f"[✔] Print finished")

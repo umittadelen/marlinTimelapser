@@ -6,6 +6,8 @@ from tqdm import tqdm
 import argparse
 from chromaconsole import *
 import datetime
+import threading
+import simpleaudio as sa
 
 # ---------------- SETTINGS ----------------
 def parse_args():
@@ -65,6 +67,11 @@ def parse_args():
         default=128,
         help="Camera contrast (0–255, default: 128)"
     )
+    parser.add_argument(
+        "--elevator_music", "-em",
+        action="store_true",
+        help="Play elevator.wav on loop while printing"
+    )
     return parser.parse_args()
 # ------------------------------------------
 
@@ -79,6 +86,7 @@ RECORD = args.record
 CAMERA_RESOLUTION = tuple(map(int, args.camera_resolution.split('x')))
 CAMERA_BRIGHTNESS = args.camera_brightness
 CAMERA_CONTRAST = args.camera_contrast
+ELEVATOR_MUSIC = args.elevator_music
 # ------------------------------------------
 
 if RECORD:
@@ -140,6 +148,25 @@ def format_time(seconds):
     """Format seconds into HH:MM:SS."""
     return str(datetime.timedelta(seconds=int(seconds)))
 
+stop_music_flag = False
+
+def play_elevator_music():
+    global stop_music_flag
+    try:
+        wave_obj = sa.WaveObject.from_wave_file("elevator.wav")
+        while not stop_music_flag:
+            play_obj = wave_obj.play()
+            play_obj.wait_done()  # wait until this loop finishes
+    except Exception as e:
+        tqdm.write(f"{Color.Text.br_red()}[!] Failed to play elevator.wav: {e}{Style.reset()}")
+
+def start_elevator_music():
+    threading.Thread(target=play_elevator_music, daemon=True).start()
+
+def stop_elevator_music():
+    global stop_music_flag
+    stop_music_flag = True
+
 # Count total non-comment lines in the G-code file
 def count_non_comment_lines(file_path):
     with open(file_path, "r") as f:
@@ -167,6 +194,10 @@ elapsed_time = 0
 # -------- Main loop --------
 with open(GCODE_FILE, "r") as f:
     layer = 0
+
+    if ELEVATOR_MUSIC:
+        start_elevator_music()
+
     for raw_line in f:
         line = raw_line.strip()
         if not line or line.startswith(";"):
@@ -248,4 +279,6 @@ progress_bar.close()
 if cap:
     cap.release()
 ser.close()
+if ELEVATOR_MUSIC:
+    stop_elevator_music()
 print(f"[✔] Print finished")
